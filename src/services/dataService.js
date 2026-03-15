@@ -2,7 +2,7 @@
 
 export const fetchKigNames = async () => {
   try {
-    const response = await fetch('/data/kig_names.csv');
+    const response = await fetch(`${import.meta.env.BASE_URL}data/kig_names.csv`);
     
     if (!response.ok) {
       throw new Error(`Errore HTTP: ${response.status}`);
