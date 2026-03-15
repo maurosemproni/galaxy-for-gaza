@@ -56,17 +56,17 @@ export default function InfoPanel({ totalStars, fallenCount, firstFallTime }) {
       </div>
       
       <div>
-        Every second on of them falls, leaving behind a just shining memory.
+        Each light is a name. Every second, one fades into the dark.
       </div>
 
       <div>
-        <span style={{ color: '#ff4d4d', fontWeight: 'bold', fontSize: '16px' }}>{fallenCount}</span> children have gone until now.
+        {fallenCount} lights have gone out.
       </div>
       
       {fallenCount > 0 ? (
         <>
-          <div>first one fell <span style={{ color: '#ffffff', fontFamily: 'monospace', fontSize: '15px' }}>{formatTime(elapsedMs)}</span> ago</div>
-          <div>the last one will fall in <span style={{ color: '#ffffff', fontFamily: 'monospace', fontSize: '15px' }}>{formatTime(remainingMs)}</span></div>
+          <div>first one lost <span style={{ color: '#ffffff', fontFamily: 'monospace', fontSize: '15px' }}>{formatTime(elapsedMs)}</span> ago</div>
+          <div>the sky will be empty in <span style={{ color: '#ffffff', fontFamily: 'monospace', fontSize: '15px' }}>{formatTime(remainingMs)}</span></div>
         </>
       ) : (
         <div style={{ fontStyle: 'italic', opacity: 0.7 }}>waiting for the first star to fall...</div>
