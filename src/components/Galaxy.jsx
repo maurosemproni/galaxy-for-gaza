@@ -1,7 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { drawHUD } from "../utils/drawHud";
+import InfoPanel from "./InfoPanel";
 
 export default function Galaxy({ starCount = 18457, csvData = [] }) {
   const canvasRef = useRef(null);
+  const [fallenCount, setFallenCount] = useState(0);
+  const [firstFallTime, setFirstFallTime] = useState(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -17,7 +21,7 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
     window.addEventListener("resize", resize);
 
     const dataList = csvData.length > 0 ? csvData : Array.from({ length: starCount }).map((_, i) => ({
-      nome: `UTENTE_${String(i + 1).padStart(4, '0')}`, // Formattato stile tech
+      nome: `UTENTE_${String(i + 1).padStart(4, '0')}`,
       eta: Math.floor(Math.random() * 60) + 18
     }));
 
@@ -52,67 +56,22 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
         offsetY: noise(),
         activationTime: null, 
         personData: null,     
-        isFalling: false      
+        isFalling: false,
+        isDead: false,
+        fallStartTime: 0,
+        fallX: 0,
+        fallY: 0,
+        fallVX: 0,
+        fallVY: 0
       };
     });
 
     let availableStarIndices = stars.map(s => s.id).sort(() => Math.random() - 0.5);
     let dataIndex = 0; 
     let lastActivationTime = 0;
-
-    // ---- NUOVO DESIGN HUD MINIMAL TECH ----
-    function drawHUD(ctx, x, y, data, opacity) {
-      ctx.save();
-      ctx.globalAlpha = opacity;
-      
-      const boxX = x + 25;
-      const boxY = y - 35;
-      const boxW = 140;
-      const boxH = 46;
-
-      // 1. Linea di puntamento (connessione rigida)
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + 15, y - 15);
-      ctx.lineTo(boxX, y - 15);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.8)"; // Ciano tech
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // 2. Sfondo HUD (Nero quasi solido, spigoli vivi)
-      ctx.fillStyle = "rgba(5, 5, 8, 0.9)";
-      ctx.fillRect(boxX, boxY, boxW, boxH);
-
-      // 3. Bordi e accenti grafici
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-      ctx.strokeRect(boxX, boxY, boxW, boxH);
-      
-      // Accento laterale più spesso
-      ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-      ctx.fillRect(boxX, boxY, 2, boxH);
-
-      // 4. Tipografia rigorosa (Monospace)
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 12px 'Courier New', Courier, monospace";
-      ctx.fillText(data.nome.toUpperCase(), boxX + 12, boxY + 18);
-
-      // Riga separatrice sottile
-      ctx.beginPath();
-      ctx.moveTo(boxX + 12, boxY + 26);
-      ctx.lineTo(boxX + boxW - 12, boxY + 26);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-      ctx.stroke();
-
-      ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-      ctx.font = "11px 'Courier New', Courier, monospace";
-      ctx.fillText(`AGE: ${data.eta}`, boxX + 12, boxY + 40);
-
-      ctx.restore();
-    }
-
+    const initTime = Date.now();
 
     function draw() {
-      // Sfondo
       ctx.globalCompositeOperation = "source-over"; 
       ctx.globalAlpha = 1;
       ctx.fillStyle = "#030305";
@@ -120,9 +79,13 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
 
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
-      const maxRadius = Math.max(1, Math.min(canvas.width, canvas.height) * 0.8);
+      
+      const time = Date.now();
+      const elapsedTotal = time - initTime;
+      
+      const globalZoom = 1 + elapsedTotal * 0.0000001; 
+      const maxRadius = Math.max(1, Math.min(canvas.width, canvas.height) * 0.8) * globalZoom;
 
-      // Alone galattico
       ctx.globalCompositeOperation = "lighter"; 
       const haloGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxRadius * 0.5);
       haloGradient.addColorStop(0, "rgba(255, 215, 150, 0.25)");
@@ -132,7 +95,6 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
       ctx.fillStyle = haloGradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const time = Date.now();
       const rotationSpeed = 0.00003; 
 
       if (time - lastActivationTime > 1000 && availableStarIndices.length > 0 && dataIndex < dataList.length) {
@@ -143,13 +105,59 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
         lastActivationTime = time;
       }
 
-      // --- ARRAY TEMPORANEO PER GLI HUD ---
-      // Salviamo qui gli HUD da disegnare, per disegnarli DOPO le stelle
       const activeHUDs = [];
 
       stars.forEach((star) => {
-        if (star.isFalling) return;
+        if (star.isDead) return;
 
+        // Gestione Caduta
+        if (star.isFalling) {
+          const fallElapsed = time - star.fallStartTime;
+          const fallDuration = 2500; // Allungato a 2.5 secondi per un addio più lento
+          
+          if (fallElapsed > fallDuration) {
+            star.isDead = true;
+            return;
+          }
+
+          // Aggiornamento posizione
+          star.fallX += star.fallVX;
+          star.fallY += star.fallVY;
+          
+          // Accelerazione leggerissima, quasi un drift naturale (da 1.06 a 1.015)
+          star.fallVX *= 1.015;
+          star.fallVY *= 1.015;
+
+          const progress = fallElapsed / fallDuration;
+          
+          // Dissolvenza lineare: inizia a sfumare fin dal primo istante
+          const fadeOut = 1 - progress; 
+
+          ctx.globalAlpha = fadeOut;
+          
+          // La stella perde corpo (si rimpicciolisce dolcemente verso lo zero)
+          const currentSize = Math.max(0.1, star.size * (1 - progress));
+
+          // Disegno la scia evanescente
+          ctx.beginPath();
+          // La scia è un po' più lunga (* 6) per dare il senso del movimento fluido
+          ctx.moveTo(star.fallX - star.fallVX * 6, star.fallY - star.fallVY * 6);
+          ctx.lineTo(star.fallX, star.fallY);
+          ctx.strokeStyle = star.color;
+          ctx.lineWidth = currentSize; 
+          ctx.lineCap = "round";
+          ctx.stroke();
+
+          // Disegno il nucleo della stella che si spegne
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(star.fallX, star.fallY, currentSize, 0, Math.PI * 2);
+          ctx.fill();
+
+          return; 
+        }
+
+        // Posizionamento normale
         const currentAngle = star.baseAngle + time * rotationSpeed;
         const x = star.radius * Math.cos(currentAngle) + star.offsetX;
         const y = star.radius * Math.sin(currentAngle) * 0.4 + star.offsetY;
@@ -178,23 +186,33 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
             starAlpha = 1; 
           } else {
             star.isFalling = true; 
-            return; 
+            star.fallStartTime = time;
+
+            // Aggiorniamo i contatori per l'InfoPanel ---
+            setFallenCount(prevCount => {
+              if (prevCount === 0) setFirstFallTime(time); // Registriamo l'ora della prima caduta
+              return prevCount + 1;
+            });
+            
+            const angleFromCenter = Math.atan2(screenY - cy, screenX - cx);
+            star.fallVX = Math.cos(angleFromCenter) * 1.5;
+            star.fallVY = Math.sin(angleFromCenter) * 1.5;
+            star.fallX = screenX;
+            star.fallY = screenY;
+            return;
           }
         }
 
-        // 1. Disegno la stella (in modalità "lighter")
         ctx.globalAlpha = starAlpha;
         ctx.fillStyle = star.color;
         ctx.fillRect(screenX, screenY, starSize, starSize);
 
-        // Se l'HUD è attivo, lo metto "in coda" per disegnarlo dopo
         if (hudOpacity > 0 && star.personData) {
           activeHUDs.push({ x: screenX, y: screenY, data: star.personData, opacity: hudOpacity });
         }
       });
 
-      // --- 2. DISEGNO GLI HUD SOPRA A TUTTO ---
-      // Riporto il canvas alla modalità normale prima di disegnare i box
+      // Disegno HUD usando la funzione importata
       ctx.globalCompositeOperation = "source-over"; 
       activeHUDs.forEach(hud => {
         drawHUD(ctx, hud.x, hud.y, hud.data, hud.opacity);
@@ -212,16 +230,25 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
   }, [starCount, csvData]);
 
   return (
-    <canvas 
-      ref={canvasRef} 
-      style={{ 
-        display: 'block', 
-        position: 'absolute', 
-        top: 0, 
-        left: 0, 
-        width: '100%', 
-        height: '100%',
-      }} 
-    />
+    <>
+      <canvas 
+        ref={canvasRef} 
+        style={{ 
+          display: 'block', 
+          position: 'absolute', 
+          top: 0, 
+          left: 0, 
+          width: '100%', 
+          height: '100%',
+          zIndex: 0
+        }} 
+      />
+      {/* Aggiungiamo il nostro pannello informativo in sovrimpressione */}
+      <InfoPanel 
+        totalStars={starCount} 
+        fallenCount={fallenCount} 
+        firstFallTime={firstFallTime} 
+      />
+    </>
   );
 }

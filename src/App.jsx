@@ -1,13 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react';
 import Galaxy from "./components/Galaxy";
-import './App.css'
+import { fetchKigNames } from './services/dataService'; // Assicurati che il percorso sia corretto
+import './App.css';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [csvData, setCsvData] = useState([]);
+
+  useEffect(() => {
+    // Creiamo una funzione asincrona interna perché useEffect non può essere direttamente async
+    const loadData = async () => {
+      const data = await fetchKigNames();
+      setCsvData(data);
+    };
+
+    loadData();
+  }, []);
 
   return (
-     <Galaxy starCount={18457} />
+    <Galaxy starCount={18457} csvData={csvData} />
   )
 }
 
-export default App
+export default App;
