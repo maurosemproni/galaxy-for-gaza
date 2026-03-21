@@ -23,5 +23,8 @@ export const GALAXY_CONFIG = {
     { offset: 0.2, color: "rgba(255, 180, 100, 0.15)" },
     { offset: 0.4, color: "rgba(100, 50, 150, 0.08)" },
     { offset: 1, color: "rgba(0, 0, 0, 0)" }
-  ]
+  ],
+
+  // --- DEBUG E PERFORMANCE ---
+  showFPS: true,
 };

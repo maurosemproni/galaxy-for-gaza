@@ -27,7 +27,9 @@ export const fetchKigNames = async () => {
       
       let displayAge = "N/D";
       if (!isNaN(ageNum)) {
-        displayAge = ageNum === 0 ? "less than 1 year" : ageNum.toString();
+        displayAge = ageNum === 0 ? "less than 1 year old" : 
+                     ageNum === 1 ? "1 year old" :
+                     ageNum.toString() + " years old";
       }
 
       return {

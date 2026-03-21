@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { GALAXY_CONFIG } from "../config/galaxyConfig";
 import { createGalaxyStars } from "../utils/starFactory";
-import { drawHUD } from "../utils/drawHud"; 
+import { drawHUDLine, drawHUDBody } from "../utils/drawHud";
 import InfoPanel from "./InfoPanel";
 
 export default function Galaxy({ csvData = [] }) {
@@ -24,6 +24,12 @@ export default function Galaxy({ csvData = [] }) {
     let dataIndex = 0;
     let lastActivationTime = 0;
     const initTime = Date.now(); 
+
+    // --- VARIABILI PER IL CONTATORE FPS ---
+    let frameCount = 0;
+    let lastFpsTime = Date.now();
+    let currentFps = 0;
+    // --------------------------------------
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -164,11 +170,79 @@ export default function Galaxy({ csvData = [] }) {
         }
       });
 
-      // Ritorno in source-over per i testi!
-      ctx.globalCompositeOperation = "source-over"; 
-      activeHUDs.forEach(hud => {
-        drawHUD(ctx, hud.x, hud.y, hud.data, hud.opacity);
+      // ---- SISTEMA ANTI-COLLISIONE HUD (A prova di bomba) ----
+      const HUD_SAFE_WIDTH = 250; 
+      const HUD_HEIGHT = 70;
+      const HUD_PADDING = 12; // Spazio verticale tra gli HUD
+
+      activeHUDs.forEach((hud, i) => {
+        hud.boxW = HUD_SAFE_WIDTH;
+        hud.boxH = HUD_HEIGHT;
+        hud.boxX = hud.x + 25;
+        
+        // Evitiamo che l'HUD esca dal bordo destro dello schermo
+        if (hud.boxX + hud.boxW > canvas.width) {
+          hud.boxX = canvas.width - hud.boxW - 10;
+        }
+
+        let targetY = hud.y - 48;
+        let overlapping = true;
+        let iterations = 0;
+
+        // Continua a spingerlo giù finché non trova uno spazio vuoto 
+        // che non urti NESSUNO dei precedenti HUD attivi.
+        while (overlapping && iterations < 10) {
+          overlapping = false;
+          for (let j = 0; j < i; j++) {
+            let other = activeHUDs[j];
+            
+            // Logica di intersezione perimetrale espansa col padding
+            if (
+              hud.boxX < other.boxX + other.boxW + HUD_PADDING &&
+              hud.boxX + hud.boxW + HUD_PADDING > other.boxX &&
+              targetY < other.boxY + other.boxH + HUD_PADDING &&
+              targetY + hud.boxH + HUD_PADDING > other.boxY
+            ) {
+              // Si sovrappone! Spingilo sotto l'altro HUD
+              targetY = other.boxY + other.boxH + HUD_PADDING;
+              overlapping = true; // Ricomincia il ciclo per assicurarsi che la nuova posizione sia libera
+              break; 
+            }
+          }
+          iterations++;
+        }
+        hud.boxY = targetY;
       });
+
+      // ---- DISEGNO A DOPPIO PASSAGGIO (L'equivalente dello Z-INDEX) ----
+      ctx.globalCompositeOperation = "source-over"; 
+
+      // PASSAGGIO 1: Disegnamo TUTTE le linee (finiscono nello sfondo)
+      activeHUDs.forEach(hud => {
+        drawHUDLine(ctx, hud.x, hud.y, hud.boxX, hud.boxY, hud.opacity);
+      });
+
+      // PASSAGGIO 2: Disegnamo TUTTI i corpi neri (copriranno le linee sottostanti)
+      activeHUDs.forEach(hud => {
+        drawHUDBody(ctx, hud.boxX, hud.boxY, hud.data, hud.opacity);
+      });
+
+      // ---- CALCOLO E STAMPA FPS (Alla fine di tutto) ----
+      frameCount++;
+      if (time - lastFpsTime >= 1000) { // Aggiorna il numero ogni secondo
+        currentFps = frameCount;
+        frameCount = 0;
+        lastFpsTime = time;
+      }
+
+      if (GALAXY_CONFIG.showFPS) {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = currentFps > 45 ? "#00ff00" : currentFps > 25 ? "#ffff00" : "#ff4d4d"; // Verde, Giallo o Rosso
+        ctx.font = "bold 14px monospace";
+        ctx.fillText(`FPS: ${currentFps}`, 20, 30);
+      }
+      // ---------------------------------------------------
 
       animationFrameId = requestAnimationFrame(draw);
     }

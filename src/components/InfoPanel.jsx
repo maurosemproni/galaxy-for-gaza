@@ -52,7 +52,7 @@ export default function InfoPanel({ totalStars, fallenCount, firstFallTime }) {
       boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
     }}>
       <div style={{ color: '#ffffff', fontSize: '16px', fontWeight: 'bold', marginBottom: '10px', letterSpacing: '1px' }}>
-        A GALAXY OF {totalStars} CHILDREN
+        A GALAXY OF {totalStars} LIGHTS
       </div>
       
       <div>
@@ -60,7 +60,7 @@ export default function InfoPanel({ totalStars, fallenCount, firstFallTime }) {
       </div>
 
       <div>
-        {fallenCount} lights have gone out.
+        <b  style={{ color: '#ffffff'}}>{fallenCount}</b> lights have already gone out.
       </div>
       
       {fallenCount > 0 ? (
