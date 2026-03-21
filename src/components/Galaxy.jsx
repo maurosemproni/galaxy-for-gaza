@@ -1,146 +1,102 @@
+// src/components/Galaxy.jsx
 import { useEffect, useRef, useState } from "react";
-import { drawHUD } from "../utils/drawHud";
+import { GALAXY_CONFIG } from "../config/galaxyConfig";
+import { createGalaxyStars } from "../utils/starFactory";
+import { drawHUD } from "../utils/drawHud"; 
 import InfoPanel from "./InfoPanel";
 
-export default function Galaxy({ starCount = 18457, csvData = [] }) {
+export default function Galaxy({ csvData = [] }) {
   const canvasRef = useRef(null);
+  
   const [fallenCount, setFallenCount] = useState(0);
   const [firstFallTime, setFirstFallTime] = useState(null);
 
+  const starsRef = useRef([]);
+  const availableIndicesRef = useRef([]);
+
   useEffect(() => {
+    starsRef.current = createGalaxyStars();
+    availableIndicesRef.current = starsRef.current.map(s => s.id).sort(() => Math.random() - 0.5);
+    
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     let animationFrameId;
+    let dataIndex = 0;
+    let lastActivationTime = 0;
+    const initTime = Date.now(); 
 
     const resize = () => {
-      canvas.width = window.innerWidth || 800;
-      canvas.height = window.innerHeight || 600;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     };
-
-    resize();
     window.addEventListener("resize", resize);
-
-    const dataList = csvData.length > 0 ? csvData : Array.from({ length: starCount }).map((_, i) => ({
-      nome: `UTENTE_${String(i + 1).padStart(4, '0')}`,
-      eta: Math.floor(Math.random() * 60) + 18
-    }));
-
-    const biasRandom = (power) => Math.pow(Math.random(), power);
-
-    const numArms = 4;
-    const spiralTwist = 4;
-    const clumpingFactor = 0.18;
-
-    const stars = Array.from({ length: starCount }).map((_, index) => {
-      const depth = biasRandom(2); 
-      const radius = biasRandom(1.5); 
-      const armOffset = (Math.random() * numArms | 0) * (2 * Math.PI / numArms);
-      const baseAngle = Math.random() * 0.2 - 0.1;
-      const spiralAngle = baseAngle + armOffset + radius * spiralTwist; 
-
-      const noise = () => (Math.random() + Math.random() + Math.random() + Math.random() + Math.random() + Math.random() - 3) / 3 * clumpingFactor;
-      
-      const colors = ["#ffffff", "#ffe0b2", "#b3e5fc", "#ffcc80"];
-
-      return {
-        id: index,
-        radius,
-        baseAngle: spiralAngle, 
-        depth,
-        size: depth * 2.5 + 0.3, 
-        baseOpacity: depth * 0.8 + 0.1,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        twinkleSpeed: Math.random() * 0.003 + 0.001,
-        twinklePhase: Math.random() * Math.PI * 2,
-        offsetX: noise(),
-        offsetY: noise(),
-        activationTime: null, 
-        personData: null,     
-        isFalling: false,
-        isDead: false,
-        fallStartTime: 0,
-        fallX: 0,
-        fallY: 0,
-        fallVX: 0,
-        fallVY: 0
-      };
-    });
-
-    let availableStarIndices = stars.map(s => s.id).sort(() => Math.random() - 0.5);
-    let dataIndex = 0; 
-    let lastActivationTime = 0;
-    const initTime = Date.now();
+    resize();
 
     function draw() {
-      ctx.globalCompositeOperation = "source-over"; 
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = "#030305";
+      const time = Date.now();
+      const elapsedTotal = time - initTime; 
+      const stars = starsRef.current;
+      const availableIndices = availableIndicesRef.current;
+
+      // ---- FIX 1: RIPRISTINO OPACITÀ AL 100% ----
+      // Questo impedisce al nero di essere trasparente e distrugge il motion blur!
+      ctx.globalAlpha = 1; 
+      // ------------------------------------------
+
+      // Sfondo pulito e perfetto
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = GALAXY_CONFIG.backgroundColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
-      
-      const time = Date.now();
-      const elapsedTotal = time - initTime;
-      
-      const globalZoom = 1 + elapsedTotal * 0.0000001; 
+      const globalZoom = 1 + elapsedTotal * GALAXY_CONFIG.zoomSpeed;
       const maxRadius = Math.max(1, Math.min(canvas.width, canvas.height) * 0.8) * globalZoom;
 
-      ctx.globalCompositeOperation = "lighter"; 
-      const haloGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxRadius * 0.5);
-      haloGradient.addColorStop(0, "rgba(255, 215, 150, 0.25)");
-      haloGradient.addColorStop(0.2, "rgba(255, 180, 100, 0.15)");
-      haloGradient.addColorStop(0.4, "rgba(100, 50, 150, 0.08)");
-      haloGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-      ctx.fillStyle = haloGradient;
+      // Alone galattico
+      ctx.globalCompositeOperation = "lighter";
+      const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxRadius * 0.5);
+      GALAXY_CONFIG.haloColors.forEach(h => halo.addColorStop(h.offset, h.color));
+      ctx.fillStyle = halo;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const rotationSpeed = 0.00003; 
-
-      if (time - lastActivationTime > 1000 && availableStarIndices.length > 0 && dataIndex < dataList.length) {
-        const starIndex = availableStarIndices.pop(); 
-        stars[starIndex].activationTime = time;       
-        stars[starIndex].personData = dataList[dataIndex]; 
+      if (time - lastActivationTime > GALAXY_CONFIG.spawnRate && availableIndices.length > 0 && dataIndex < csvData.length) {
+        const idx = availableIndices.pop();
+        stars[idx].activationTime = time;
+        stars[idx].personData = csvData[dataIndex];
         dataIndex++;
         lastActivationTime = time;
       }
 
       const activeHUDs = [];
 
-      stars.forEach((star) => {
+      // ---- FIX 2: MODALITÀ "LIGHTER" PER TUTTE LE STELLE ----
+      // Le stelle tornano ad essere fatte di pura luce, fondendosi elegantemente
+      ctx.globalCompositeOperation = "lighter"; 
+      // -------------------------------------------------------
+
+      stars.forEach(star => {
         if (star.isDead) return;
 
-        // Gestione Caduta
         if (star.isFalling) {
           const fallElapsed = time - star.fallStartTime;
-          const fallDuration = 2500; // Allungato a 2.5 secondi per un addio più lento
-          
-          if (fallElapsed > fallDuration) {
-            star.isDead = true;
-            return;
+          if (fallElapsed > GALAXY_CONFIG.fallDuration) { 
+            star.isDead = true; 
+            return; 
           }
 
-          // Aggiornamento posizione
           star.fallX += star.fallVX;
           star.fallY += star.fallVY;
-          
-          // Accelerazione leggerissima, quasi un drift naturale (da 1.06 a 1.015)
           star.fallVX *= 1.015;
           star.fallVY *= 1.015;
 
-          const progress = fallElapsed / fallDuration;
-          
-          // Dissolvenza lineare: inizia a sfumare fin dal primo istante
+          const progress = fallElapsed / GALAXY_CONFIG.fallDuration;
           const fadeOut = 1 - progress; 
+          const currentSize = Math.max(0.1, star.size * (1 - progress));
 
           ctx.globalAlpha = fadeOut;
           
-          // La stella perde corpo (si rimpicciolisce dolcemente verso lo zero)
-          const currentSize = Math.max(0.1, star.size * (1 - progress));
-
-          // Disegno la scia evanescente
           ctx.beginPath();
-          // La scia è un po' più lunga (* 6) per dare il senso del movimento fluido
           ctx.moveTo(star.fallX - star.fallVX * 6, star.fallY - star.fallVY * 6);
           ctx.lineTo(star.fallX, star.fallY);
           ctx.strokeStyle = star.color;
@@ -148,7 +104,6 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
           ctx.lineCap = "round";
           ctx.stroke();
 
-          // Disegno il nucleo della stella che si spegne
           ctx.fillStyle = "#ffffff";
           ctx.beginPath();
           ctx.arc(star.fallX, star.fallY, currentSize, 0, Math.PI * 2);
@@ -157,29 +112,27 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
           return; 
         }
 
-        // Posizionamento normale
-        const currentAngle = star.baseAngle + time * rotationSpeed;
+        const currentAngle = star.baseAngle + elapsedTotal * GALAXY_CONFIG.rotationSpeed;
         const x = star.radius * Math.cos(currentAngle) + star.offsetX;
-        const y = star.radius * Math.sin(currentAngle) * 0.4 + star.offsetY;
+        const y = star.radius * Math.sin(currentAngle) * GALAXY_CONFIG.galaxyIncline + star.offsetY;
 
         const screenX = cx + x * maxRadius;
         const screenY = cy + y * maxRadius;
 
         if (!star.activationTime && (screenX < 0 || screenX > canvas.width || screenY < 0 || screenY > canvas.height)) return;
 
-        let twinkle = 0.6 + Math.sin(time * star.twinkleSpeed + star.twinklePhase) * 0.4;
+        let twinkle = 0.6 + Math.sin(elapsedTotal * star.twinkleSpeed + star.twinklePhase) * 0.4;
+        
         let starSize = star.size;
         let starAlpha = star.baseOpacity * twinkle;
-
         let hudOpacity = 0;
         
         if (star.activationTime) {
           const timeActive = time - star.activationTime;
-          const displayDuration = 3000; 
 
-          if (timeActive < displayDuration) {
+          if (timeActive < GALAXY_CONFIG.hudDuration) {
             if (timeActive < 300) hudOpacity = timeActive / 300;
-            else if (timeActive > displayDuration - 500) hudOpacity = (displayDuration - timeActive) / 500;
+            else if (timeActive > GALAXY_CONFIG.hudDuration - 500) hudOpacity = (GALAXY_CONFIG.hudDuration - timeActive) / 500;
             else hudOpacity = 1;
 
             starSize = star.size * 2 + 1;
@@ -187,11 +140,10 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
           } else {
             star.isFalling = true; 
             star.fallStartTime = time;
-
-            // Aggiorniamo i contatori per l'InfoPanel ---
-            setFallenCount(prevCount => {
-              if (prevCount === 0) setFirstFallTime(time); // Registriamo l'ora della prima caduta
-              return prevCount + 1;
+            
+            setFallenCount(prev => {
+              if (prev === 0) setFirstFallTime(time);
+              return prev + 1;
             });
             
             const angleFromCenter = Math.atan2(screenY - cy, screenX - cx);
@@ -199,7 +151,7 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
             star.fallVY = Math.sin(angleFromCenter) * 1.5;
             star.fallX = screenX;
             star.fallY = screenY;
-            return;
+            return; 
           }
         }
 
@@ -212,7 +164,7 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
         }
       });
 
-      // Disegno HUD usando la funzione importata
+      // Ritorno in source-over per i testi!
       ctx.globalCompositeOperation = "source-over"; 
       activeHUDs.forEach(hud => {
         drawHUD(ctx, hud.x, hud.y, hud.data, hud.opacity);
@@ -221,31 +173,24 @@ export default function Galaxy({ starCount = 18457, csvData = [] }) {
       animationFrameId = requestAnimationFrame(draw);
     }
 
-    draw();
+    if (csvData.length > 0) {
+      draw();
+    }
 
     return () => {
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [starCount, csvData]);
+  }, [csvData]); 
 
   return (
     <>
       <canvas 
         ref={canvasRef} 
-        style={{ 
-          display: 'block', 
-          position: 'absolute', 
-          top: 0, 
-          left: 0, 
-          width: '100%', 
-          height: '100%',
-          zIndex: 0
-        }} 
+        style={{ display: 'block', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0 }} 
       />
-      {/* Aggiungiamo il nostro pannello informativo in sovrimpressione */}
       <InfoPanel 
-        totalStars={starCount} 
+        totalStars={GALAXY_CONFIG.starCount} 
         fallenCount={fallenCount} 
         firstFallTime={firstFallTime} 
       />

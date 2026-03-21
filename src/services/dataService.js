@@ -31,7 +31,7 @@ export const fetchKigNames = async () => {
       }
 
       return {
-        nomeArabo: arName, // <-- Nuovo dato estratto
+        nomeArabo: arName,
         nome: enName,
         eta: displayAge
       };
