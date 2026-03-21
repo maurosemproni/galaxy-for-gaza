@@ -9,7 +9,6 @@ export default function Galaxy({ csvData = [] }) {
   const canvasRef = useRef(null);
   
   const [fallenCount, setFallenCount] = useState(0);
-  const [firstFallTime, setFirstFallTime] = useState(null);
 
   const starsRef = useRef([]);
   const availableIndicesRef = useRef([]);
@@ -148,7 +147,6 @@ export default function Galaxy({ csvData = [] }) {
             star.fallStartTime = time;
             
             setFallenCount(prev => {
-              if (prev === 0) setFirstFallTime(time);
               return prev + 1;
             });
             
@@ -163,7 +161,33 @@ export default function Galaxy({ csvData = [] }) {
 
         ctx.globalAlpha = starAlpha;
         ctx.fillStyle = star.color;
-        ctx.fillRect(screenX, screenY, starSize, starSize);
+        
+        // --- MODIFICA PER IL BAGLIORE ---
+        if (star.activationTime) {
+          // 1. Applichiamo il bagliore solo alla stella attiva.
+          
+          // Usiamo il bianco come colore dell'ombra per dare un effetto "luce pura".
+          ctx.shadowColor = "#ffffff"; 
+          
+          // Più la stella è grande, più il bagliore è ampio (starSize * 2.5).
+          ctx.shadowBlur = starSize * 2.5; 
+
+          ctx.beginPath();
+          // La disegniamo bella rotonda
+          ctx.arc(screenX, screenY, starSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // 2. IMPORTANTE: Resettiamo subito l'ombra!
+          // Se dimentichiamo questa riga, il Canvas proverà ad applicare l'ombra 
+          // a tutte le 18.000 stelle successive, bloccando il computer all'istante.
+          ctx.shadowBlur = 0; 
+          ctx.shadowColor = "transparent";
+
+        } else {
+          // Le 18.000 stelle di sfondo rimangono quadratini veloci e netti (senza ombra).
+          ctx.fillRect(screenX, screenY, starSize, starSize);
+        }
+        // ---------------------------------
 
         if (hudOpacity > 0 && star.personData) {
           activeHUDs.push({ x: screenX, y: screenY, data: star.personData, opacity: hudOpacity });
@@ -266,7 +290,6 @@ export default function Galaxy({ csvData = [] }) {
       <InfoPanel 
         totalStars={GALAXY_CONFIG.starCount} 
         fallenCount={fallenCount} 
-        firstFallTime={firstFallTime} 
       />
     </>
   );
