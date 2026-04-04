@@ -26,5 +26,5 @@ export const GALAXY_CONFIG = {
   ],
 
   // --- DEBUG E PERFORMANCE ---
-  showFPS: true,
+  showFPS: false,
 };
